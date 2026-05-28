@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api', 
+  // Intentamos leer la variable de Vercel. Si no existe, usamos el puerto 8080 de tu Spring Boot local
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api', 
 });
 
 // Interceptor: Antes de que salga cualquier petición, viaja a por el Token al LocalStorage
