@@ -1,0 +1,42 @@
+services:
+  # 🍃 1. Base de Datos Local
+  mongodb:
+    image: mongo:7.0
+    container_name: saas_database
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - saas_network
+
+  # ☕ 2. Backend (Spring Boot)
+  backend:
+    build: ./demo # <-- Revisa que coincida con el nombre de tu carpeta backend
+    container_name: saas_backend_api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongodb
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/tasktracker
+    networks:
+      - saas_network
+
+  # ⚛️ 3. Frontend (React + Nginx)
+  frontend:
+    build: ./task-tracker-front # <-- Revisa que coincida con el nombre de tu carpeta frontend
+    container_name: saas_frontend_web
+    ports:
+      - "80:80" # <-- ¡Tu web ahora correrá en http://localhost a secas!
+    depends_on:
+      - backend
+    networks:
+      - saas_network
+
+volumes:
+  mongo_data:
+
+networks:
+  saas_network:
+    driver: bridge
