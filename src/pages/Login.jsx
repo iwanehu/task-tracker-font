@@ -10,10 +10,22 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    // 1. LIMPIAR AVISOS ANTERIORES
+    setError('');
+
+    // 2. VALIDACIÓN: Evitar que manden campos vacíos o con puros espacios
+    if (!email.trim() || !password.trim()) {
+      setError('¡Todos los campos son obligatorios! Introduce tus credenciales.');
+      return; // 🛑 Detiene la ejecución aquí, no gasta petición a Render
+    }
+
     try {
-      setError('');
-      // Consumimos tu endpoint del Nivel 5
-      const response = await api.post('/auth/login', { email, password });
+      // Consumimos tu endpoint enviando los datos limpios de espacios vacíos
+      const response = await api.post('/auth/login', { 
+        email: email.trim(), 
+        password: password 
+      });
       
       // Guardamos el token en el almacenamiento del navegador
       localStorage.setItem('token', response.data.token);
@@ -21,9 +33,10 @@ const Login = () => {
       // Saltamos al panel de tareas
       navigate('/dashboard');
     } catch (err) {
-      // Usamos el error en consola para cumplir estrictamente con ESLint
       console.error(err);
-      setError('Credenciales incorrectas o error en el servidor');
+      // Intentamos capturar el mensaje exacto de Spring Boot si existe
+      const servidorMensaje = err.response?.data?.message;
+      setError(servidorMensaje || 'Credenciales incorrectas o error en el servidor.');
     }
   };
 

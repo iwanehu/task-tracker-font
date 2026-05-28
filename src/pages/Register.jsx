@@ -12,12 +12,30 @@ const Register = () => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    
+    // 1. LIMPIAR AVISOS ANTERIORES
+    setError('');
+    setSuccess('');
+
+    // 2. VALIDACIÓN: Evitar campos vacíos o llenos de puros espacios en blanco
+    if (!name.trim() || !email.trim() || !password.trim()) {
+      setError('¡Todos los campos son obligatorios! No puedes dejar espacios vacíos.');
+      return; // Detiene la ejecución para que no envíe nada a Render
+    }
+
+    // 3. VALIDACIÓN EXTRA: Controlar tamaño de contraseña en el cliente
+    if (password.length < 6) {
+      setError('La contraseña es demasiado corta. Debe tener al menos 6 caracteres.');
+      return; // Detiene la ejecución
+    }
+
     try {
-      setError('');
-      setSuccess('');
-      
-      // Enviamos los datos a tu endpoint de registro del Backend
-      await api.post('/auth/register', { name, email, password });
+      // Si pasa las validaciones de arriba, enviamos los datos limpiados con .trim()
+      await api.post('/auth/register', { 
+        name: name.trim(), 
+        email: email.trim(), 
+        password: password 
+      });
       
       setSuccess('¡Usuario registrado con éxito! Redirigiendo al login...');
       
@@ -28,7 +46,9 @@ const Register = () => {
 
     } catch (err) {
       console.error(err);
-      setError('Error al registrar el usuario. Es posible que el email ya exista.');
+      // Si el backend responde con un mensaje específico, lo usamos; si no, el genérico
+      const servidorMensaje = err.response?.data?.message;
+      setError(servidorMensaje || 'Error al registrar el usuario. Es posible que el email ya exista.');
     }
   };
 
