@@ -6,33 +6,38 @@ const Dashboard = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true); // ⏳ Estado de carga inicial
+  const [isSubmitting, setIsSubmitting] = useState(false); // 🚀 Evita doble envío en el formulario
 
-  // 1. Cargar las tareas (Ruta corregida a /api/tasks)
+  // 1. Cargar las tareas del servidor
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await api.get('/api/tasks');
+      setTasks(response.data);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar las tareas del servidor');
+    } finally {
+      setLoading(false); // Apagamos el estado de carga siempre (falle o funcione)
+    }
+  };
+
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const response = await api.get('/api/tasks'); // 👈 Añadido /api
-        setTasks(response.data);
-      } catch (err) {
-        console.error(err);
-        setError('Error al cargar las tareas del servidor');
-      }
-    };
-
     fetchTasks();
   }, []);
 
-  // 📤 2. Crear una nueva tarea con actualización optimista de red
+  // 📤 2. Crear una nueva tarea
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
       setError('');
+      setIsSubmitting(true); // Bloqueamos el botón de añadir
+
+      const response = await api.post('/api/tasks', { title, description });
       
-      // El POST nos devuelve la tarea recién creada en la Base de Datos con su ID y Status por defecto
-      const response = await api.post('/api/tasks', { title, description }); // 👈 Añadido /api
-      
-      // ✅ PRÁCTICA EMPRESARIAL: Añadimos el objeto directamente al estado.
-      // Así ahorramos una petición GET completa a Render, ahorrando ancho de banda.
+      // Actualización optimista: inyectamos la tarea nueva directamente en la lista
       setTasks((prevTasks) => [...prevTasks, response.data]);
       
       setTitle('');
@@ -40,13 +45,31 @@ const Dashboard = () => {
     } catch (err) {
       console.error(err);
       setError('No se pudo crear la tarea');
+    } finally {
+      setIsSubmitting(false); // Liberamos el botón
     }
   };
 
-  // 🚪 3. Salir del sistema de forma limpia (Sin provocar bucles raros de recarga)
+  // 🗑️ 3. Eliminar una tarea por ID
+  const handleDeleteTask = async (id) => {
+    if (!window.confirm('¿Estás seguro de que quieres eliminar esta tarea?')) return;
+
+    try {
+      setError('');
+      // Llamamos al endpoint DELETE que ajustamos en Spring Boot
+      await api.delete(`/api/tasks/${id}`);
+      
+      // Filtramos el estado local para borrarla visualmente al instante
+      setTasks((prevTasks) => prevTasks.filter(task => (task.id || task._id) !== id));
+    } catch (err) {
+      console.error(err);
+      setError('No se pudo eliminar la tarea del servidor');
+    }
+  };
+
+  // 🚪 4. Salir del sistema
   const handleLogout = () => {
     localStorage.removeItem('token');
-    // En lugar de reload(), redirigimos para que la ruta protegida limpie el árbol de componentes
     window.location.href = '/login';
   };
 
@@ -79,41 +102,75 @@ const Dashboard = () => {
           required 
           style={{ flex: 2, padding: '10px', borderRadius: '4px', border: '1px solid #ddd' }}
         />
-        <button type="submit" style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          Añadir
+        <button 
+          type="submit" 
+          disabled={isSubmitting} // Se deshabilita durante el envío
+          style={{ 
+            padding: '10px 20px', 
+            background: isSubmitting ? '#6c757d' : '#28a745', 
+            color: 'white', 
+            border: 'none', 
+            borderRadius: '4px', 
+            cursor: isSubmitting ? 'not-allowed' : 'pointer' 
+          }}
+        >
+          {isSubmitting ? 'Añadiendo...' : 'Añadir'}
         </button>
       </form>
 
-      {/* Listado de tareas */}
-      <h3>Tus tareas asignadas</h3>
-      {tasks.length === 0 ? (
+      {/* Listado de tareas con control de estado de carga */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+        <h3>Tus tareas asignadas</h3>
+        <button 
+          onClick={fetchTasks} 
+          disabled={loading}
+          style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontSize: '0.9em' }}
+        >
+          {loading ? 'Sincronizando...' : '🔄 Sincronizar'}
+        </button>
+      </div>
+
+      {loading ? (
+        // ⏳ Contenedor visual de carga
+        <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d', fontStyle: 'italic' }}>
+          <p>⏳ Conectando con el servidor en Render y cargando tareas...</p>
+        </div>
+      ) : tasks.length === 0 ? (
         <p style={{ color: '#6c757d', fontStyle: 'italic' }}>No tienes ninguna tarea registrada todavía. ¡Crea la primera arriba!</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {tasks.map((task) => (
-            // 🔍 Nota: Si en tu TaskResponseDTO de Java el campo se llama 'id', se queda como task.id. 
-            // Si mapeaste la entidad pura de Mongo, cámbialo a task._id
-            <div key={task.id || task._id} style={{ border: '1px solid #e2e8f0', padding: '15px', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <strong style={{ fontSize: '1.1em' }}>{task.title}</strong>
-                <span style={{ 
-                  padding: '3px 8px', 
-                  borderRadius: '12px', 
-                  fontSize: '0.85em', 
-                  background: task.status === 'PENDING' ? '#ffeeba' : '#c3e6cb', 
-                  color: task.status === 'PENDING' ? '#856404' : '#155724' 
-                }}>
-                  {task.status || 'PENDING'}
-                </span>
+          {tasks.map((task) => {
+            const taskId = task.id || task._id;
+            return (
+              <div key={taskId} style={{ border: '1px solid #e2e8f0', padding: '15px', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ flex: 1, marginRight: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                    <strong style={{ fontSize: '1.1em' }}>{task.title}</strong>
+                    <span style={{ 
+                      padding: '3px 8px', 
+                      borderRadius: '12px', 
+                      fontSize: '0.85em', 
+                      background: task.status === 'PENDING' ? '#ffeeba' : '#c3e6cb', 
+                      color: task.status === 'PENDING' ? '#856404' : '#155724' 
+                    }}>
+                      {task.status || 'PENDING'}
+                    </span>
+                  </div>
+                  <p style={{ margin: 0, color: '#4a5568' }}>{task.description}</p>
+                </div>
+
+                {/* 🗑️ Botón de eliminar */}
+                <button 
+                  onClick={() => handleDeleteTask(taskId)}
+                  style={{ padding: '6px 12px', background: '#fff', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}
+                  onMouseEnter={(e) => { e.target.style.background = '#dc3545'; e.target.style.color = '#white'; }}
+                  onMouseLeave={(e) => { e.target.style.background = '#fff'; e.target.style.color = '#dc3545'; }}
+                >
+                  Eliminar
+                </button>
               </div>
-              <p style={{ margin: 0, color: '#4a5568' }}>{task.description}</p>
-              {task.createdAt && (
-                <small style={{ color: '#a0aec0', display: 'block', marginTop: '10px' }}>
-                  Creada el: {new Date(task.createdAt).toLocaleString()}
-                </small>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
