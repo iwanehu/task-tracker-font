@@ -7,11 +7,11 @@ const Dashboard = () => {
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
 
-  //1. Cargar las tareas del usuario logueado
+  // 1. Cargar las tareas (Ruta corregida a /api/tasks)
   useEffect(() => {
     const fetchTasks = async () => {
       try {
-        const response = await api.get('/tasks');
+        const response = await api.get('/api/tasks'); // 👈 Añadido /api
         setTasks(response.data);
       } catch (err) {
         console.error(err);
@@ -20,30 +20,34 @@ const Dashboard = () => {
     };
 
     fetchTasks();
-  }, []); // Se ejecuta solo una vez al montar
+  }, []);
 
-  // 📤 2. Crear una nueva tarea vinculada al usuario de forma automática
+  // 📤 2. Crear una nueva tarea con actualización optimista de red
   const handleCreateTask = async (e) => {
     e.preventDefault();
     try {
       setError('');
-      await api.post('/tasks', { title, description });
+      
+      // El POST nos devuelve la tarea recién creada en la Base de Datos con su ID y Status por defecto
+      const response = await api.post('/api/tasks', { title, description }); // 👈 Añadido /api
+      
+      // ✅ PRÁCTICA EMPRESARIAL: Añadimos el objeto directamente al estado.
+      // Así ahorramos una petición GET completa a Render, ahorrando ancho de banda.
+      setTasks((prevTasks) => [...prevTasks, response.data]);
+      
       setTitle('');
       setDescription('');
-      
-      // Volvemos a pedir las tareas actualizadas
-      const response = await api.get('/tasks');
-      setTasks(response.data);
     } catch (err) {
       console.error(err);
       setError('No se pudo crear la tarea');
     }
   };
 
-  // 🚪 3. Salir del sistema (Limpiar JWT)
+  // 🚪 3. Salir del sistema de forma limpia (Sin provocar bucles raros de recarga)
   const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.reload();
+    // En lugar de reload(), redirigimos para que la ruta protegida limpie el árbol de componentes
+    window.location.href = '/login';
   };
 
   return (
@@ -87,17 +91,27 @@ const Dashboard = () => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {tasks.map((task) => (
-            <div key={task.id} style={{ border: '1px solid #e2e8f0', padding: '15px', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            // 🔍 Nota: Si en tu TaskResponseDTO de Java el campo se llama 'id', se queda como task.id. 
+            // Si mapeaste la entidad pura de Mongo, cámbialo a task._id
+            <div key={task.id || task._id} style={{ border: '1px solid #e2e8f0', padding: '15px', borderRadius: '6px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
                 <strong style={{ fontSize: '1.1em' }}>{task.title}</strong>
-                <span style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '0.85em', background: task.status === 'PENDING' ? '#ffeeba' : '#c3e6cb', color: task.status === 'PENDING' ? '#856404' : '#155724' }}>
-                  {task.status}
+                <span style={{ 
+                  padding: '3px 8px', 
+                  borderRadius: '12px', 
+                  fontSize: '0.85em', 
+                  background: task.status === 'PENDING' ? '#ffeeba' : '#c3e6cb', 
+                  color: task.status === 'PENDING' ? '#856404' : '#155724' 
+                }}>
+                  {task.status || 'PENDING'}
                 </span>
               </div>
               <p style={{ margin: 0, color: '#4a5568' }}>{task.description}</p>
-              <small style={{ color: '#a0aec0', display: 'block', marginTop: '10px' }}>
-                Creada el: {new Date(task.createdAt).toLocaleString()}
-              </small>
+              {task.createdAt && (
+                <small style={{ color: '#a0aec0', display: 'block', marginTop: '10px' }}>
+                  Creada el: {new Date(task.createdAt).toLocaleString()}
+                </small>
+              )}
             </div>
           ))}
         </div>
